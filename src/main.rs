@@ -16,6 +16,24 @@ pub enum PlayerAction {
     TopLeftThruster,
 }
 
+impl PlayerAction {
+    pub fn thruster_iterator() -> impl Iterator<Item = PlayerAction> {
+        use PlayerAction::*;
+        [
+            RearRightThruster,
+            RearLeftThruster,
+            FrontRightThruster,
+            FrontLeftThruster,
+            BottomRightThruster,
+            BottomLeftThruster,
+            TopRightThruster,
+            TopLeftThruster,
+        ]
+        .iter()
+        .copied()
+    }
+}
+
 #[derive(Bundle)]
 pub struct InputListenerBundle {
     input_manager: InputManagerBundle<PlayerAction>,
@@ -68,6 +86,9 @@ fn main() {
 #[derive(Component)]
 pub struct Player;
 
+#[derive(Component)]
+pub struct Thruster(pub PlayerAction);
+
 fn setup(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
@@ -85,11 +106,77 @@ fn setup(
         .insert(Velocity::default())
         .insert(Collider::capsule_y(0.5, 0.5))
         .insert(InputListenerBundle::input_map())
+        .insert(Player)
         .with_children(|parent| {
             parent.spawn(Camera3dBundle {
                 transform: Transform::from_xyz(0.0, 0.0, 7.0),
                 ..default()
             });
+
+            parent.spawn((
+                TransformBundle {
+                    local: Transform::from_xyz(0.3, 0.0, 0.5),
+                    ..default()
+                },
+                Thruster(PlayerAction::RearRightThruster),
+                RigidBody::KinematicPositionBased,
+            ));
+            parent.spawn((
+                TransformBundle {
+                    local: Transform::from_xyz(-0.3, 0.0, 0.5),
+                    ..default()
+                },
+                Thruster(PlayerAction::RearLeftThruster),
+                RigidBody::KinematicPositionBased,
+            ));
+            parent.spawn((
+                TransformBundle {
+                    local: Transform::from_xyz(0.3, 0.0, -0.5),
+                    ..default()
+                },
+                Thruster(PlayerAction::FrontRightThruster),
+                RigidBody::KinematicPositionBased,
+            ));
+            parent.spawn((
+                TransformBundle {
+                    local: Transform::from_xyz(-0.3, 0.0, -0.5),
+                    ..default()
+                },
+                Thruster(PlayerAction::FrontLeftThruster),
+                RigidBody::KinematicPositionBased,
+            ));
+            parent.spawn((
+                TransformBundle {
+                    local: Transform::from_xyz(0.3, -1.0, 0.5),
+                    ..default()
+                },
+                Thruster(PlayerAction::BottomRightThruster),
+                RigidBody::KinematicPositionBased,
+            ));
+            parent.spawn((
+                TransformBundle {
+                    local: Transform::from_xyz(-0.3, -1.0, 0.5),
+                    ..default()
+                },
+                Thruster(PlayerAction::BottomLeftThruster),
+                RigidBody::KinematicPositionBased,
+            ));
+            parent.spawn((
+                TransformBundle {
+                    local: Transform::from_xyz(0.3, 1.0, 0.5),
+                    ..default()
+                },
+                Thruster(PlayerAction::TopRightThruster),
+                RigidBody::KinematicPositionBased,
+            ));
+            parent.spawn((
+                TransformBundle {
+                    local: Transform::from_xyz(-0.3, 1.0, 0.5),
+                    ..default()
+                },
+                Thruster(PlayerAction::TopLeftThruster),
+                RigidBody::KinematicPositionBased,
+            ));
         });
 
     for _ in 0..100 {
@@ -128,7 +215,8 @@ fn setup(
 fn handle_thrusters(
     time: Res<Time>,
     mut gizmos: Gizmos,
-    mut player_query: Query<(&mut Velocity, &Transform, &ActionState<PlayerAction>)>,
+    mut player_query: Query<(&mut Velocity, &Transform, &ActionState<PlayerAction>), With<Player>>,
+    thruster_query: Query<(&Transform, &Thruster), Without<Player>>,
 ) {
     for (mut velocity, transform, action) in &mut player_query {
         let mut angular_velocity_to_add = Vec3::ZERO;
@@ -136,7 +224,6 @@ fn handle_thrusters(
 
         let forward_vector = transform.forward();
         let up_vector = transform.up();
-        let right_vector = transform.right();
 
         if action.pressed(PlayerAction::RearRightThruster)
             && action.pressed(PlayerAction::RearLeftThruster)
@@ -162,83 +249,52 @@ fn handle_thrusters(
             linear_velocity_to_add += up_vector * -0.2 * time.delta_seconds();
         }
 
+        // Handles Thruster Gizmos
+        for thruster in PlayerAction::thruster_iterator() {
+            for (thruster_transform, thruster_component) in &thruster_query {
+                if action.pressed(thruster) && thruster_component.0 == thruster {
+                    gizmos.sphere(
+                        thruster_transform.translation,
+                        thruster_transform.rotation,
+                        0.5,
+                        Color::ORANGE,
+                    );
+                    if thruster == PlayerAction::RearRightThruster {
+                        println!("{:?}:{}", thruster, thruster_transform.translation);
+                    }
+                }
+            }
+        }
+
         if action.pressed(PlayerAction::RearRightThruster) {
-            gizmos.sphere(
-                transform.translation + Vec3::new(0.3, 0.0, 0.5),
-                transform.rotation,
-                0.5,
-                Color::ORANGE,
-            );
             angular_velocity_to_add += up_vector * 0.05 * time.delta_seconds();
         }
 
         if action.pressed(PlayerAction::RearLeftThruster) {
-            gizmos.sphere(
-                transform.translation + Vec3::new(-0.3, 0.0, 0.5),
-                transform.rotation,
-                0.5,
-                Color::ORANGE,
-            );
             angular_velocity_to_add += up_vector * -0.05 * time.delta_seconds();
         }
 
         if action.pressed(PlayerAction::FrontRightThruster) {
-            gizmos.sphere(
-                transform.translation + Vec3::new(0.3, 0.0, -0.5),
-                transform.rotation,
-                0.5,
-                Color::ORANGE,
-            );
             angular_velocity_to_add += up_vector * -0.05 * time.delta_seconds();
         }
 
         if action.pressed(PlayerAction::FrontLeftThruster) {
-            gizmos.sphere(
-                transform.translation + Vec3::new(-0.3, 0.0, -0.5),
-                transform.rotation,
-                0.5,
-                Color::ORANGE,
-            );
             angular_velocity_to_add += up_vector * 0.05 * time.delta_seconds();
         }
 
         if action.pressed(PlayerAction::BottomRightThruster) {
-            gizmos.sphere(
-                transform.translation + Vec3::new(0.3, -1.0, 0.5),
-                transform.rotation,
-                0.5,
-                Color::ORANGE,
-            );
             angular_velocity_to_add += forward_vector * 0.05 * time.delta_seconds();
         }
 
         if action.pressed(PlayerAction::BottomLeftThruster) {
-            gizmos.sphere(
-                transform.translation + Vec3::new(-0.3, -1.0, 0.5),
-                transform.rotation,
-                0.5,
-                Color::ORANGE,
-            );
             angular_velocity_to_add += forward_vector * -0.05 * time.delta_seconds();
         }
 
         if action.pressed(PlayerAction::TopRightThruster) {
-            gizmos.sphere(
-                transform.translation + Vec3::new(0.3, 1.0, 0.5),
-                transform.rotation,
-                0.5,
-                Color::ORANGE,
-            );
             angular_velocity_to_add += forward_vector * -0.05 * time.delta_seconds();
         }
 
         if action.pressed(PlayerAction::TopLeftThruster) {
-            gizmos.sphere(
-                transform.translation + Vec3::new(-0.3, 1.0, 0.5),
-                transform.rotation,
-                0.5,
-                Color::ORANGE,
-            );
             angular_velocity_to_add += forward_vector * 0.05 * time.delta_seconds();
         }
 
